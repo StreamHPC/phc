@@ -231,6 +231,12 @@ async def main():
         global TRACE_FILE
         TRACE_FILE = open(trace_path, "a")
 
+    # sccache launches the compiler in preprocessor-only mode. This has some issues in HIP,
+    # but we can fix them up here.
+    if "-E" in cmd:
+        preprocess_only(cmd)
+        return
+
     # Check whether we're actually being asked to compile something. Sometimes CMake or
     # other tools run the compiler to get information about the compiler, for example
     # the implicit include directories. Additionally, don't bother with commands that
@@ -595,6 +601,33 @@ async def compile_device(cmd, arch, output, cuid, host_output, error_event):
     finally:
         end = time.time()
         trace(start, end, f"{host_output}::{arch}")
+
+def preprocess_only(cmd):
+    """
+    Run an (offload) compilation in preprocessor-only mode. This is a special path in
+    PHC because there are some issues related to this in sccache[2] and clang[3], which
+    we can easily fix up here for the time being.
+
+    [2]: https://github.com/mozilla/sccache/issues/2762
+    [3]: https://github.com/llvm/llvm-project/issues/207375
+    """
+    it = iter(cmd)
+    new_cmd = []
+    for arg in it:
+        # Get rid of any compression flags. Since this is preprocessing-only, it shouldn't
+        # affect the output (other than not producing compressed data on the stdout).
+        if arg == "--offload-compress":
+            pass
+        # Don't compile with the new offload driver even if we're asked explicitly.
+        elif arg == "--offload-new-driver":
+            pass
+        else:
+            new_cmd.append(arg)
+
+    # Don't compile with the new offload driver.
+    new_cmd.append("--no-offload-new-driver")
+
+    await run(new_cmd)
 
 if __name__ == "__main__":
     # Run the main function to completion using asyncio.
