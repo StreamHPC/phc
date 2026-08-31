@@ -234,7 +234,7 @@ async def main():
     # sccache launches the compiler in preprocessor-only mode. This has some issues in HIP,
     # but we can fix them up here.
     if "-E" in cmd:
-        preprocess_only(cmd)
+        await preprocess_only(cmd)
         return
 
     # Check whether we're actually being asked to compile something. Sometimes CMake or
@@ -602,7 +602,7 @@ async def compile_device(cmd, arch, output, cuid, host_output, error_event):
         end = time.time()
         trace(start, end, f"{host_output}::{arch}")
 
-def preprocess_only(cmd):
+async def preprocess_only(cmd):
     """
     Run an (offload) compilation in preprocessor-only mode. This is a special path in
     PHC because there are some issues related to this in sccache[2] and clang[3], which
